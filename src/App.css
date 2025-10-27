@@ -40,3 +40,7 @@
 .read-the-docs {
   color: #888;
 }
+
+.dark h1 {
+  text-shadow: 0 0 10px #39FF14, 0 0 20px #39FF14, 0 0 40px #39FF14;
+}

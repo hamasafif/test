@@ -1,84 +1,72 @@
-import { useState, useEffect } from 'react';
-import Header from './components/Header';
-import Sidebar from './components/Sidebar';
-import Summary from './components/Summary';
-import TransactionForm from './components/TransactionForm';
-import TransactionList from './components/TransactionList';
-import Reports from './components/Reports'; // Import komponen baru
+import { useState } from "react";
+import Navbar from "./components/Navbar";
+import Sidebar from "./components/Sidebar";
+import Summary from "./components/Summary";
+import Reports from "./components/Reports";
+import Transactions from "./pages/Transactions";
+import Budget from "./pages/Budget";
+import Savings from "./pages/Savings";
+import Goals from "./pages/Goals";
 
-function App() {
-  const [transactions, setTransactions] = useState([]);
-  const [activePage, setActivePage] = useState('dashboard');
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [filteredTransactions, setFilteredTransactions] = useState([]); // Untuk filter di laporan
-
-  useEffect(() => {
-    const saved = localStorage.getItem('transactions');
-    if (saved) setTransactions(JSON.parse(saved));
-
-    const savedMode = localStorage.getItem('darkMode') === 'true';
-    setIsDarkMode(savedMode);
-    if (savedMode) {
-      document.documentElement.classList.add('dark');
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('transactions', JSON.stringify(transactions));
-  }, [transactions]);
-
-  const toggleDarkMode = () => {
-    const newMode = !isDarkMode;
-    setIsDarkMode(newMode);
-    localStorage.setItem('darkMode', newMode);
-    if (newMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  };
-
-  const addTransaction = (transaction) => {
-    setTransactions([...transactions, { ...transaction, id: Date.now() }]);
-  };
-
-  const deleteTransaction = (id) => {
-    setTransactions(transactions.filter(t => t.id !== id));
-  };
+export default function App() {
+  const [activePage, setActivePage] = useState("dashboard");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const renderContent = () => {
-    if (activePage === 'dashboard') {
-      return (
-        <div className="p-6">
-          <Summary transactions={transactions} />
-        </div>
-      );
-    } else if (activePage === 'transactions') {
-      return (
-        <div className="p-6">
-          <TransactionForm onAdd={addTransaction} />
-          <TransactionList transactions={transactions} onDelete={deleteTransaction} />
-        </div>
-      );
-    } else if (activePage === 'reports') {
-      return (
-        <div className="p-6">
-          <Reports transactions={transactions} setFilteredTransactions={setFilteredTransactions} filteredTransactions={filteredTransactions} />
-        </div>
-      );
+    switch (activePage) {
+      case "dashboard":
+        return <Summary />;
+      case "transactions":
+        return <Transactions />;
+      case "reports":
+        return <Reports />;
+      case "budget":
+        return <Budget />;
+      case "savings":
+        return <Savings />;
+      case "goals":
+        return <Goals />;
+      default:
+        return <Summary />;
     }
-    return <div className="p-6">Halaman tidak ditemukan.</div>;
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex transition-colors duration-300">
-      <Sidebar setActivePage={setActivePage} activePage={activePage} />
+    <div
+      className="
+        flex min-h-screen text-gray-800 dark:text-neonGreen transition-all duration-700
+        bg-gradient-to-br from-softBlue via-lightBg to-white 
+        dark:bg-none dark:bg-darkBg
+      "
+    >
+      {/* Sidebar desktop */}
+      <div className="hidden md:block">
+        <Sidebar setActivePage={setActivePage} activePage={activePage} />
+      </div>
+
+      {/* Overlay + Sidebar untuk mobile */}
+      {isSidebarOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          ></div>
+          <Sidebar
+            setActivePage={setActivePage}
+            activePage={activePage}
+            onClose={() => setIsSidebarOpen(false)}
+          />
+        </>
+      )}
+
+      {/* Konten utama */}
       <div className="flex-1 flex flex-col">
-        <Header toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} />
-        <main className="flex-1">{renderContent()}</main>
+        <Navbar onMenuClick={() => setIsSidebarOpen(true)} />
+
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+          {renderContent()}
+        </main>
       </div>
     </div>
   );
 }
-
-export default App;
