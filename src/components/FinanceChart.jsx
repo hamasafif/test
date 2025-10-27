@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useEffect, useState } from "react";
 import {
   LineChart,
   Line,
@@ -10,83 +10,138 @@ import {
   PieChart,
   Pie,
   Cell,
+  Legend,
 } from "recharts";
-import { ThemeContext } from "../context/ThemeContext";
+import { useTheme } from "../context/ThemeContext";
 
-export default function FinanceChart({ transactions = [] }) {
-  const { theme } = useContext(ThemeContext);
+export default function FinanceChart() {
+  const [transactions, setTransactions] = useState([]);
+  const { theme } = useTheme();
 
-  // Contoh data sementara (kalau belum ada transaksi)
-  const sampleData =
-    transactions.length > 0
-      ? transactions
-      : [
-          { date: "Jan", income: 5000000, expense: 2000000 },
-          { date: "Feb", income: 7000000, expense: 3000000 },
-          { date: "Mar", income: 6000000, expense: 3500000 },
-          { date: "Apr", income: 8000000, expense: 4000000 },
-          { date: "Mei", income: 7500000, expense: 2500000 },
-        ];
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const user = JSON.parse(localStorage.getItem("user"));
+        if (!token || !user) return;
 
-  const totalIncome = sampleData.reduce((sum, t) => sum + t.income, 0);
-  const totalExpense = sampleData.reduce((sum, t) => sum + t.expense, 0);
+        const res = await fetch(
+          `http://localhost:5000/api/transactions?userId=${user.id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json();
+        setTransactions(data);
+      } catch (err) {
+        console.error("❌ Gagal mengambil data transaksi:", err);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
+
+  // Tema & warna
+  const COLORS = theme === "dark" ? ["#39FF14", "#FF4D6D"] : ["#16a34a", "#dc2626"];
+  const lineColorIncome = theme === "dark" ? "#39FF14" : "#16a34a";
+  const lineColorExpense = theme === "dark" ? "#FF4D6D" : "#dc2626";
+  const textColor = theme === "dark" ? "#a3e635" : "#111827";
+  const gridColor = theme === "dark" ? "#374151" : "#e5e7eb";
+
+  // Data bulanan
+  const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+    month: new Date(0, i).toLocaleString("id-ID", { month: "short" }),
+    income: 0,
+    expense: 0,
+  }));
+
+  transactions.forEach((t) => {
+    const month = new Date(t.date).getMonth();
+    const amount = Number(t.amount);
+    if (t.type === "income") monthlyData[month].income += amount;
+    if (t.type === "expense") monthlyData[month].expense += amount;
+  });
+
+  const totalIncome = transactions
+    .filter((t) => t.type === "income")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  const totalExpense = transactions
+    .filter((t) => t.type === "expense")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
 
   const pieData = [
     { name: "Pemasukan", value: totalIncome },
     { name: "Pengeluaran", value: totalExpense },
   ];
 
-  const colors =
-    theme === "dark"
-      ? ["#39FF14", "#FF6B6B"]
-      : ["#00AEEF", "#FF9F40"];
-
   return (
-    <div className="grid md:grid-cols-2 gap-8 mt-10">
-      {/* Line Chart */}
-      <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl p-6 transition-all">
-        <h3 className="text-lg font-semibold mb-4 text-brightBlue dark:text-neonGreen">
-          Tren Keuangan Bulanan
+    <div className="grid md:grid-cols-2 gap-6 mt-6">
+      {/* LINE CHART */}
+      <div
+        className={`p-5 rounded-2xl shadow-lg transition-all ${
+          theme === "dark"
+            ? "bg-darkCard text-neonGreen"
+            : "bg-white text-gray-800"
+        }`}
+      >
+        <h3
+          className={`text-lg font-bold mb-4 ${
+            theme === "dark" ? "text-neonGreen" : "text-blue-700"
+          }`}
+        >
+          📈 Tren Keuangan Bulanan
         </h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={sampleData}>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke={theme === "dark" ? "#333" : "#ddd"}
-            />
-            <XAxis dataKey="date" stroke={theme === "dark" ? "#aaa" : "#333"} />
-            <YAxis stroke={theme === "dark" ? "#aaa" : "#333"} />
+
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={monthlyData}>
+            <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
+            <XAxis dataKey="month" stroke={textColor} />
+            <YAxis stroke={textColor} />
             <Tooltip
               contentStyle={{
-                backgroundColor: theme === "dark" ? "#111" : "#fff",
+                backgroundColor: theme === "dark" ? "#0f172a" : "#fff",
                 border: "none",
-                color: theme === "dark" ? "#39FF14" : "#00AEEF",
+                borderRadius: "8px",
+                color: textColor,
               }}
             />
+            <Legend />
             <Line
               type="monotone"
               dataKey="income"
-              stroke={colors[0]}
-              strokeWidth={3}
-              dot={{ r: 4 }}
+              stroke={lineColorIncome}
+              strokeWidth={2}
+              dot={{ fill: lineColorIncome }}
+              name="Pemasukan"
             />
             <Line
               type="monotone"
               dataKey="expense"
-              stroke={colors[1]}
-              strokeWidth={3}
-              dot={{ r: 4 }}
+              stroke={lineColorExpense}
+              strokeWidth={2}
+              dot={{ fill: lineColorExpense }}
+              name="Pengeluaran"
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Pie Chart */}
-      <div className="bg-white dark:bg-gray-900 shadow-md rounded-xl p-6 transition-all">
-        <h3 className="text-lg font-semibold mb-4 text-brightBlue dark:text-neonGreen">
-          Proporsi Keuangan
+      {/* PIE CHART */}
+      <div
+        className={`p-5 rounded-2xl shadow-lg transition-all ${
+          theme === "dark"
+            ? "bg-darkCard text-neonGreen"
+            : "bg-white text-gray-800"
+        }`}
+      >
+        <h3
+          className={`text-lg font-bold mb-4 ${
+            theme === "dark" ? "text-neonGreen" : "text-blue-700"
+          }`}
+        >
+          📊 Proporsi Keuangan
         </h3>
-        <ResponsiveContainer width="100%" height={300}>
+
+        <ResponsiveContainer width="100%" height={260}>
           <PieChart>
             <Pie
               data={pieData}
@@ -94,20 +149,22 @@ export default function FinanceChart({ transactions = [] }) {
               nameKey="name"
               cx="50%"
               cy="50%"
-              outerRadius={100}
+              outerRadius={90}
               label
             >
-              {pieData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={colors[index]} />
+              {pieData.map((_, index) => (
+                <Cell key={index} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>
             <Tooltip
               contentStyle={{
-                backgroundColor: theme === "dark" ? "#111" : "#fff",
+                backgroundColor: theme === "dark" ? "#0f172a" : "#fff",
                 border: "none",
-                color: theme === "dark" ? "#39FF14" : "#00AEEF",
+                borderRadius: "8px",
+                color: textColor,
               }}
             />
+            <Legend />
           </PieChart>
         </ResponsiveContainer>
       </div>

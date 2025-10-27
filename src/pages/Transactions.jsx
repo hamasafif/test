@@ -1,166 +1,255 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { useTheme } from "../context/ThemeContext";
+import { useTransactionUpdate } from "../context/TransactionContext";
 
 export default function Transactions() {
+  const [transactions, setTransactions] = useState([]);
   const [form, setForm] = useState({
-    title: "",
-    amount: "",
     type: "income",
+    category: "",
+    amount: "",
+    note: "",
     date: "",
   });
 
-  // 🧮 Format input ke currency IDR (dengan Rp dan pemisah ribuan)
+  const { theme } = useTheme();
+  const { triggerRefresh } = useTransactionUpdate();
+
   const formatCurrency = (value) => {
-    if (!value) return "";
-    // Hapus semua karakter non-angka
-    const number = value.replace(/[^\d]/g, "");
-    // Ubah ke format Rp
+    const number = value.replace(/\D/g, "");
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
       currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(number);
+      maximumFractionDigits: 0,
+    }).format(number ? parseInt(number) : 0);
   };
 
-  // 🧩 Handler perubahan input
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const parseCurrency = (formattedValue) =>
+    parseInt(formattedValue.replace(/[^\d]/g, "")) || 0;
 
-    if (name === "amount") {
-      // Saat mengetik, simpan angka mentah dan tampilkan format currency
-      const rawValue = value.replace(/[^\d]/g, "");
-      setForm({
-        ...form,
-        amount: rawValue ? formatCurrency(rawValue) : "",
-      });
-    } else {
-      setForm({ ...form, [name]: value });
+  const fetchTransactions = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!token || !user) return;
+
+      const res = await fetch(
+        `http://localhost:5000/api/transactions?userId=${user.id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      setTransactions(data);
+    } catch (err) {
+      console.error("❌ Gagal mengambil transaksi:", err);
     }
   };
 
-  // 🧩 Handler submit form
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    try {
+      const token = localStorage.getItem("token");
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!token || !user) return alert("Login dulu bro!");
 
-    if (!form.title || !form.amount || !form.date) {
-      alert("Mohon isi semua field sebelum menyimpan transaksi!");
-      return;
+      const payload = {
+        userId: user.id,
+        type: form.type,
+        category: form.category,
+        amount: parseCurrency(form.amount),
+        note: form.note,
+        date: form.date || new Date().toISOString().split("T")[0],
+      };
+
+      const res = await fetch("http://localhost:5000/api/transactions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        alert("✅ Transaksi berhasil ditambahkan!");
+        setForm({
+          type: "income",
+          category: "",
+          amount: "",
+          note: "",
+          date: "",
+        });
+        await fetchTransactions();
+        triggerRefresh();
+      } else {
+        const err = await res.json();
+        alert("❌ Gagal menambahkan transaksi: " + err.error);
+      }
+    } catch (error) {
+      console.error("❌ Error menambah transaksi:", error);
+      alert("Terjadi kesalahan internal.");
     }
-
-    const rawAmount = parseInt(form.amount.replace(/[^\d]/g, ""), 10);
-
-    const newTransaction = {
-      id: Date.now(),
-      title: form.title,
-      amount: rawAmount,
-      type: form.type,
-      date: form.date,
-    };
-
-    console.log("Transaksi Baru:", newTransaction);
-
-    // Reset form
-    setForm({
-      title: "",
-      amount: "",
-      type: "income",
-      date: "",
-    });
-
-    alert("✅ Transaksi berhasil ditambahkan (frontend mode)");
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
+    <div
+      className={`p-6 min-h-screen transition-colors duration-500 ${
+        theme === "dark"
+          ? "bg-darkBg text-neonGreen"
+          : "bg-gradient-to-br from-blue-50 via-white to-lightBg text-gray-800"
+      }`}
+    >
+      <h2 className="text-2xl font-bold mb-6">💰 Transaksi</h2>
+
+      <motion.form
+        onSubmit={handleSubmit}
+        className={`grid md:grid-cols-2 gap-4 mb-8 p-6 rounded-2xl shadow-lg border ${
+          theme === "dark"
+            ? "bg-darkCard border-neonGreen/30"
+            : "bg-white border-gray-200"
+        }`}
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl transition-colors"
       >
-        <h2 className="text-2xl font-bold mb-6 text-brightBlue dark:text-neonGreen">
-          Tambah Transaksi
-        </h2>
+        {/* Fields */}
+        <div>
+          <label className="block mb-1 font-semibold">Jenis Transaksi</label>
+          <select
+            value={form.type}
+            onChange={(e) => setForm({ ...form, type: e.target.value })}
+            className={`w-full p-2 rounded-md border focus:ring-2 ${
+              theme === "dark"
+                ? "bg-darkBg border-neonGreen text-neonGreen"
+                : "bg-white border-gray-300 text-gray-800"
+            }`}
+          >
+            <option value="income">Pemasukan</option>
+            <option value="expense">Pengeluaran</option>
+          </select>
+        </div>
 
-        {/* FORM INPUT */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Judul Transaksi */}
-          <div>
-            <label className="block text-gray-700 dark:text-gray-300 mb-2">
-              Judul Transaksi
-            </label>
-            <input
-              type="text"
-              name="title"
-              value={form.title}
-              onChange={handleChange}
-              placeholder="Contoh: Gaji Bulanan"
-              className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 
-                         dark:bg-gray-800 focus:ring-2 focus:ring-brightBlue dark:focus:ring-neonGreen transition"
-            />
-          </div>
+        <div>
+          <label className="block mb-1 font-semibold">Kategori</label>
+          <input
+            type="text"
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value })}
+            className={`w-full p-2 rounded-md border focus:ring-2 ${
+              theme === "dark"
+                ? "bg-darkBg border-neonGreen text-neonGreen"
+                : "bg-white border-gray-300 text-gray-800"
+            }`}
+            required
+          />
+        </div>
 
-          {/* Nominal Transaksi */}
-          <div>
-            <label className="block text-gray-700 dark:text-gray-300 mb-2">
-              Nominal
-            </label>
-            <input
-              type="text"
-              name="amount"
-              value={form.amount}
-              onChange={handleChange}
-              placeholder="Rp 0"
-              className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 
-                         dark:bg-gray-800 focus:ring-2 focus:ring-brightBlue dark:focus:ring-neonGreen transition"
-            />
-          </div>
+        <div>
+          <label className="block mb-1 font-semibold">Nominal (Rp)</label>
+          <input
+            type="text"
+            value={form.amount}
+            onChange={(e) =>
+              setForm({ ...form, amount: formatCurrency(e.target.value) })
+            }
+            className={`w-full p-2 rounded-md border focus:ring-2 ${
+              theme === "dark"
+                ? "bg-darkBg border-neonGreen text-neonGreen"
+                : "bg-white border-gray-300 text-gray-800"
+            }`}
+            placeholder="Rp 0"
+            required
+          />
+        </div>
 
-          {/* Jenis Transaksi */}
-          <div>
-            <label className="block text-gray-700 dark:text-gray-300 mb-2">
-              Jenis Transaksi
-            </label>
-            <select
-              name="type"
-              value={form.type}
-              onChange={handleChange}
-              className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 
-                         dark:bg-gray-800 focus:ring-2 focus:ring-brightBlue dark:focus:ring-neonGreen transition"
-            >
-              <option value="income">Pemasukan</option>
-              <option value="expense">Pengeluaran</option>
-            </select>
-          </div>
+        <div>
+          <label className="block mb-1 font-semibold">Tanggal</label>
+          <input
+            type="date"
+            value={form.date}
+            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            className={`w-full p-2 rounded-md border focus:ring-2 ${
+              theme === "dark"
+                ? "bg-darkBg border-neonGreen text-neonGreen"
+                : "bg-white border-gray-300 text-gray-800"
+            }`}
+          />
+        </div>
 
-          {/* Tanggal */}
-          <div>
-            <label className="block text-gray-700 dark:text-gray-300 mb-2">
-              Tanggal
-            </label>
-            <input
-              type="date"
-              name="date"
-              value={form.date}
-              onChange={handleChange}
-              className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 
-                         dark:bg-gray-800 focus:ring-2 focus:ring-brightBlue dark:focus:ring-neonGreen transition"
-            />
-          </div>
+        <div className="md:col-span-2">
+          <label className="block mb-1 font-semibold">Catatan</label>
+          <textarea
+            value={form.note}
+            onChange={(e) => setForm({ ...form, note: e.target.value })}
+            className={`w-full p-2 rounded-md border focus:ring-2 ${
+              theme === "dark"
+                ? "bg-darkBg border-neonGreen text-neonGreen"
+                : "bg-white border-gray-300 text-gray-800"
+            }`}
+            placeholder="Deskripsi transaksi..."
+          ></textarea>
+        </div>
 
-          {/* Tombol Simpan */}
-          <div className="pt-4">
-            <button
-              type="submit"
-              className="w-full bg-brightBlue dark:bg-neonGreen 
-                         text-white dark:text-black font-semibold py-3 rounded-lg 
-                         hover:opacity-90 transition"
-            >
-              Simpan Transaksi
-            </button>
-          </div>
-        </form>
-      </motion.div>
+        <div className="md:col-span-2 text-center mt-4">
+          <button
+            type="submit"
+            className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md font-semibold shadow-md transition-all"
+          >
+            💾 Simpan Transaksi
+          </button>
+        </div>
+      </motion.form>
+
+      {/* Tabel Transaksi */}
+      <div
+        className={`p-6 rounded-2xl shadow-lg border ${
+          theme === "dark"
+            ? "bg-darkCard border-neonGreen/30"
+            : "bg-white border-gray-200"
+        }`}
+      >
+        <h3 className="text-xl font-bold mb-4">📋 Riwayat Transaksi</h3>
+        {transactions.length === 0 ? (
+          <p className="italic">Belum ada transaksi.</p>
+        ) : (
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="text-left border-b border-gray-300 dark:border-gray-700">
+                <th className="py-2">Tanggal</th>
+                <th>Kategori</th>
+                <th>Jenis</th>
+                <th>Nominal</th>
+                <th>Catatan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t) => (
+                <tr
+                  key={t.id}
+                  className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-darkBg transition"
+                >
+                  <td className="py-2">{t.date}</td>
+                  <td>{t.category}</td>
+                  <td
+                    className={
+                      t.type === "income"
+                        ? "text-green-400 font-semibold"
+                        : "text-pink-400 font-semibold"
+                    }
+                  >
+                    {t.type === "income" ? "Pemasukan" : "Pengeluaran"}
+                  </td>
+                  <td>{formatCurrency(t.amount.toString())}</td>
+                  <td>{t.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
